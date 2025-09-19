@@ -12,7 +12,7 @@ import {
   CameraView,
   useCameraPermissions,
 } from 'expo-camera';
-import { Video } from 'expo-av';
+import { Video } from 'expo-av'; 
 
 export default function ReportIssueScreen() {
   const cameraRef = useRef(null);
@@ -35,50 +35,37 @@ export default function ReportIssueScreen() {
     }
     setCameraOpen(true);
   };
-
- const takeVideo = async () => {
+  const takeVideo = async () => {
     if (!cameraRef.current || recording) return;
-
+  
     setRecording(true);
-
-    try {
-      const recordingPromise = cameraRef.current.recordAsync({
-        quality: '720p',
-        onRecordingStarted: () => {
-          // This ensures the countdown and stop timer start only after the camera is ready
-          setCountdown(2);
-
-          const countdownInterval = setInterval(() => {
-            setCountdown(prev => {
-              if (prev <= 1) {
-                clearInterval(countdownInterval);
-                return 0;
-              }
-              return prev - 1;
-            });
-          }, 1000);
-
-          setTimeout(() => {
-            if (cameraRef.current) {
-              cameraRef.current.stopRecording();
-            }
-          }, 2000);
-        },
+    setCountdown(2);
+  
+    // Countdown timer before recording starts
+    let countdownInterval = setInterval(() => {
+      setCountdown(prev => {
+        if (prev <= 1) {
+          clearInterval(countdownInterval);
+          return 0;
+        }
+        return prev - 1;
       });
-
-      const video = await recordingPromise;
-
+    }, 1000);
+  
+    try {
+      const video = await cameraRef.current.recordAsync({
+        quality: '720p',
+        maxDuration: 2, // auto stop after 2 seconds
+      });
+  
       if (video?.uri) {
         setVideoUri(video.uri);
         setCameraOpen(false);
-      } else {
-        throw new Error('Video recording failed to produce a valid URI.');
       }
     } catch (err) {
-      console.log('Recording error:', err);
-      Alert.alert('Error', 'Could not record video. Please try again.');
+      console.error("Recording error:", err);
+      Alert.alert("Error", "Could not record video. Please try again.");
     } finally {
-      // These will reset the state after the whole process is complete
       setRecording(false);
       setCountdown(0);
     }
