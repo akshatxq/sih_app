@@ -11,12 +11,14 @@ import {
 import {
   CameraView,
   useCameraPermissions,
+  useMicrophonePermissions,
 } from 'expo-camera';
-import { Video } from 'expo-av'; 
+import { VideoView, useVideoPlayer } from 'expo-video';
 
 export default function ReportIssueScreen() {
   const cameraRef = useRef(null);
   const [permission, requestPermission] = useCameraPermissions();
+  const [microphonePermission, requestMicrophonePermission] = useMicrophonePermissions();
   const [cameraOpen, setCameraOpen] = useState(false);
   const [recording, setRecording] = useState(false);
   const [countdown, setCountdown] = useState(0);
@@ -25,22 +27,39 @@ export default function ReportIssueScreen() {
   const [uploaded, setUploaded] = useState(false);
   const [facing, setFacing] = useState('back');
 
+  // Create video player at top level, will be null until videoUri is set
+  const player = useVideoPlayer(videoUri, player => {
+    if (player && videoUri) {
+      player.loop = true;
+      player.play();
+    }
+  });
+
   const openCamera = async () => {
     if (!permission?.granted) {
       const result = await requestPermission();
       if (!result.granted) {
-        Alert.alert('Permission Required', 'Camera permission is required to take photos.');
+        Alert.alert('Permission Required', 'Camera permission is required to take videos.');
         return;
       }
     }
+
+    if (!microphonePermission?.granted) {
+      const result = await requestMicrophonePermission();
+      if (!result.granted) {
+        Alert.alert('Permission Required', 'Microphone permission is required to record videos with audio.');
+        return;
+      }
+    }
+
     setCameraOpen(true);
   };
   const takeVideo = async () => {
     if (!cameraRef.current || recording) return;
-  
+
     setRecording(true);
     setCountdown(2);
-  
+
     // Countdown timer before recording starts
     let countdownInterval = setInterval(() => {
       setCountdown(prev => {
@@ -51,13 +70,13 @@ export default function ReportIssueScreen() {
         return prev - 1;
       });
     }, 1000);
-  
+
     try {
       const video = await cameraRef.current.recordAsync({
         quality: '720p',
         maxDuration: 2, // auto stop after 2 seconds
       });
-  
+
       if (video?.uri) {
         setVideoUri(video.uri);
         setCameraOpen(false);
@@ -70,7 +89,7 @@ export default function ReportIssueScreen() {
       setCountdown(0);
     }
   };
-  
+
   const uploadVideo = async () => {
     if (!videoUri) return;
     setUploading(true);
@@ -109,25 +128,28 @@ export default function ReportIssueScreen() {
 
   // Camera is open
   if (cameraOpen && !videoUri) {
-    if (!permission) {
+    if (!permission || !microphonePermission) {
       return (
         <View style={styles.center}>
-          <Text>Requesting camera permission...</Text>
+          <Text>Requesting permissions...</Text>
         </View>
       );
     }
 
-    if (!permission.granted) {
+    if (!permission.granted || !microphonePermission.granted) {
       return (
         <View style={styles.center}>
           <Text style={styles.permissionText}>
-            We need your permission to access the camera.
+            We need camera and microphone permissions to record videos.
           </Text>
           <TouchableOpacity
-            onPress={requestPermission}
+            onPress={async () => {
+              if (!permission.granted) await requestPermission();
+              if (!microphonePermission.granted) await requestMicrophonePermission();
+            }}
             style={styles.permissionButton}
           >
-            <Text style={styles.permissionButtonText}>Grant Permission</Text>
+            <Text style={styles.permissionButtonText}>Grant Permissions</Text>
           </TouchableOpacity>
         </View>
       );
@@ -204,13 +226,11 @@ export default function ReportIssueScreen() {
             autoPlay
           />
         ) : (
-          <Video
-            source={{ uri: videoUri }}
+          <VideoView
+            player={player}
             style={styles.videoPlayer}
-            useNativeControls
-            resizeMode="contain"
-            isLooping
-            shouldPlay
+            useNativeControls={true}
+            contentFit="contain"
           />
         )}
 
